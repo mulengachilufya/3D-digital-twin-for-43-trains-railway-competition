@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HSS EVS360 — 3D Fleet & Depot Simulation</title>
+<style>
+  :root{--ink:#e8eef5;--muted:#90a2b6;--accent:#2ee6a6;--accent2:#39a0ff;--warn:#ffcc44;--bad:#ff5d6c;--res:#39a0ff;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#070b11;color:var(--ink);
+    font-family:"Segoe UI",Roboto,system-ui,Arial,sans-serif;overflow:hidden}
+  #scene{position:fixed;inset:0;display:block}
+  .panel{position:fixed;background:rgba(14,22,32,.82);border:1px solid #22303f;border-radius:12px;
+    backdrop-filter:blur(6px);padding:12px 14px}
+  #hud{top:14px;left:14px;width:290px}
+  #hud h1{margin:0 0 2px;font-size:15px}
+  #hud .sub{color:var(--muted);font-size:11.5px;margin-bottom:10px;line-height:1.4}
+  .seg{display:flex;gap:6px;margin-bottom:10px}
+  .seg button{flex:1;padding:8px;border-radius:9px;border:1px solid #22303f;background:#0f1620;
+    color:var(--muted);cursor:pointer;font-weight:600;font-size:12px}
+  .seg button.on{background:linear-gradient(180deg,#16322a,#10241d);color:var(--accent);border-color:#1f5c47}
+  .seg button.on.base{background:linear-gradient(180deg,#2a1d16,#241410);color:var(--warn);border-color:#5c401f}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;font-size:12.5px}
+  .stat .v{font-weight:700;font-variant-numeric:tabular-nums}
+  .big{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+  .availbox{margin:8px 0 4px;padding:10px;border-radius:10px;border:1px solid #22303f;background:#0c1320}
+  .availbox.pass{border-color:#1f5c47} .availbox.fail{border-color:#5c2530}
+  .availbox small{color:var(--muted);font-size:11px}
+  .ctl{margin-top:8px}
+  .ctl label{display:flex;justify-content:space-between;color:var(--muted);font-size:11.5px;margin-bottom:4px}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .row{display:flex;gap:6px}
+  .row button{flex:1;padding:6px;border-radius:8px;border:1px solid #22303f;background:#0f1620;color:var(--ink);cursor:pointer;font-size:11.5px}
+  #legend{bottom:14px;left:14px;font-size:12px;line-height:1.9}
+  #legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+  #hint{bottom:14px;right:14px;color:var(--muted);font-size:11px;text-align:right;line-height:1.5}
+  .tag{color:var(--muted);font-size:10.5px}
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:40px;font-size:14px;color:var(--warn)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="hud" class="panel">
+  <h1>EVS360 Fleet · 3D Twin</h1>
+  <div class="sub">Live depot &amp; line simulation. Trains run St.Petersburg&nbsp;to&nbsp;Moscow, peel into the depot for maintenance, and wait in hot reserve.</div>
+  <div class="seg" id="modeSeg">
+    <button data-mode="baseline" class="base">Baseline</button>
+    <button data-mode="optimized" class="on">Optimized</button>
+  </div>
+  <div class="availbox pass" id="availBox">
+    <div class="stat" style="padding:0"><span>Operational availability</span></div>
+    <div class="big" id="availV">—</div>
+    <small id="availNote">target ≥ 89%</small>
+  </div>
+  <div class="stat"><span style="color:var(--accent)">● Running (on the line)</span><span class="v" id="cRun">0</span></div>
+  <div class="stat"><span style="color:var(--res)">● Hot reserve</span><span class="v" id="cRes">0</span></div>
+  <div class="stat"><span style="color:var(--warn)">● Routine maintenance</span><span class="v" id="cMnt">0</span></div>
+  <div class="stat"><span style="color:var(--bad)">● Major overhaul</span><span class="v" id="cOvh">0</span></div>
+  <div class="stat"><span class="tag">Simulated date</span><span class="v tag" id="date">—</span></div>
+  <div class="ctl"><label>Speed <b id="spV"></b></label><input type="range" id="speed" min="1" max="80" step="1" value="25"></div>
+  <div class="ctl"><label>Daytime depot bays <b id="byV"></b></label><input type="range" id="bays" min="4" max="24" step="1" value="14"></div>
+  <div class="row"><button id="playBtn">⏸ Pause</button><button id="resetBtn">↻ Restart</button></div>
+</div>
+
+<div id="legend" class="panel">
+  <div><i style="background:#2ee6a6"></i>Running</div>
+  <div><i style="background:#39a0ff"></i>Hot reserve</div>
+  <div><i style="background:#ffcc44"></i>Routine maintenance (IS100–IS540)</div>
+  <div><i style="background:#ff5d6c"></i>Major overhaul (IS600 / IS700)</div>
+</div>
+<div id="hint" class="panel">Drag to orbit · scroll to zoom<br>Same model as the 2D twin · 43 trains</div>
+<div id="err"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+if(!window.THREE){ document.getElementById('err').style.display='flex';
+  document.getElementById('err').textContent='This 3D view needs the Three.js library (loaded from a CDN). Connect to the internet and reload, or open the 2D twin (index.html) which works fully offline.'; return; }
+
+/* ---------------- model constants (match the 2D twin) ---------------- */
+const TOTAL=43, RESERVE=4, KMDAY=3000, BASE=12500;
+const CYCLES=[ // highest first; nested (higher includes lower)
+  {n:'IS700',km:2400000,h:504,ovh:true},
+  {n:'IS600',km:1200000,h:336,ovh:true},
+  {n:'IS540',km:600000, h:60, ovh:false},
+  {n:'IS530',km:400000, h:40, ovh:false},
+  {n:'IS520',km:200000, h:24, ovh:false},
+  {n:'IS510',km:100000, h:12, ovh:false},
+  {n:'IS200',km:25000,  h:5,  ovh:false},
+  {n:'IS100',km:12500,  h:2,  ovh:false}
+];
+function cycleAt(boundary){ for(const c of CYCLES){ if(boundary % c.km === 0) return c; } return CYCLES[CYCLES.length-1]; }
+
+/* ---------------- colours ---------------- */
+const COL={run:0x2ee6a6, rsv:0x39a0ff, mnt:0xffcc44, ovh:0xff5d6c};
+
+/* ---------------- scene ---------------- */
+const canvas=document.getElementById('scene');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x070b11);
+scene.fog=new THREE.Fog(0x070b11,120,280);
+const camera=new THREE.PerspectiveCamera(52,1,0.1,1000);
+
+scene.add(new THREE.AmbientLight(0x8899bb,0.7));
+const dir=new THREE.DirectionalLight(0xffffff,0.85); dir.position.set(40,80,30); scene.add(dir);
+const dir2=new THREE.DirectionalLight(0x3a6ea5,0.35); dir2.position.set(-50,40,-30); scene.add(dir2);
+
+const LINE_HALF=60, LANES=[-3.2,0,3.2];
+const DEPOT_Z=-22, RES_Z=16, QUEUE_Z=-34;
+
+// ground
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(320,200),
+  new THREE.MeshLambertMaterial({color:0x0c141d}));
+ground.rotation.x=-Math.PI/2; ground.position.y=-0.6; scene.add(ground);
+const grid=new THREE.GridHelper(320,64,0x1b2735,0x121b26); grid.position.y=-0.58; scene.add(grid);
+
+// rail line (the high-speed corridor)
+LANES.forEach(z=>{
+  const rail=new THREE.Mesh(new THREE.BoxGeometry(LINE_HALF*2,0.12,0.9),
+    new THREE.MeshLambertMaterial({color:0x243240}));
+  rail.position.set(0,-0.45,z); scene.add(rail);
+});
+// stations
+function station(x,label,color){
+  const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.BoxGeometry(4,7,16),new THREE.MeshLambertMaterial({color}));
+  b.position.y=3; g.add(b);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(5,0.6,18),new THREE.MeshLambertMaterial({color:0x2a3a4a}));
+  roof.position.y=6.8; g.add(roof);
+  g.position.set(x,0,0); scene.add(g); return g;
+}
+station(-LINE_HALF-6,'SPb',0x274055);
+station(LINE_HALF+6,'Moscow',0x274055);
+
+// depot pad + bay markers
+const depotPad=new THREE.Mesh(new THREE.PlaneGeometry(LINE_HALF*2+20,26),
+  new THREE.MeshLambertMaterial({color:0x0e1822}));
+depotPad.rotation.x=-Math.PI/2; depotPad.position.set(0,-0.55,DEPOT_Z); scene.add(depotPad);
+// reserve siding pad
+const resPad=new THREE.Mesh(new THREE.PlaneGeometry(LINE_HALF*1.6,10),
+  new THREE.MeshLambertMaterial({color:0x0c1726}));
+resPad.rotation.x=-Math.PI/2; resPad.position.set(0,-0.55,RES_Z); scene.add(resPad);
+
+let bayMarkers=[];
+function buildBays(n){
+  bayMarkers.forEach(m=>scene.remove(m)); bayMarkers=[];
+  const cols=Math.ceil(n/2);
+  for(let i=0;i<n;i++){
+    const row=i%2, col=Math.floor(i/2);
+    const x=(col-(cols-1)/2)*9.5;
+    const z=DEPOT_Z+(row?5:-5);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(8,0.08,3),
+      new THREE.MeshLambertMaterial({color:0x16242f}));
+    m.position.set(x,-0.5,z); scene.add(m); bayMarkers.push(m);
+  }
+}
+
+/* ---------------- trains ---------------- */
+const segGeo=new THREE.BoxGeometry(0.95,1.15,1.5);
+const trains=[];
+function makeTrain(){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshLambertMaterial({color:COL.run});
+  for(let i=0;i<8;i++){
+    const s=new THREE.Mesh(segGeo,mat);
+    s.position.x=(i-3.5)*1.02; g.add(s);
+  }
+  // cab nose
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(0.7,1.1,8),mat);
+  nose.rotation.z=-Math.PI/2; nose.position.x=4.1; g.add(nose);
+  scene.add(g);
+  return {g,mat,odo:0,lastB:0,busyUntil:0,role:'run',cyc:null,
+          lineX:(Math.random()*2-1)*LINE_HALF,dir:Math.random()<0.5?1:-1,
+          lane:0,slot:new THREE.Vector3(),flash:0};
+}
+
+/* ---------------- simulation state ---------------- */
+let simDay=0, playing=true, mode='optimized', NBAYS=14, speed=25, lastRotate=0;
+const startDate=new Date(2028,3,1);
+
+function resetSim(){
+  simDay=0; lastRotate=0;
+  trains.forEach((t,i)=>{
+    t.odo=Math.random()*1.2e6; t.lastB=Math.floor((t.odo)/BASE);
+    t.busyUntil=0; t.cyc=null; t.flash=0;
+    t.role = i>=TOTAL-RESERVE ? 'rsv' : 'run';
+    t.lineX=(Math.random()*2-1)*LINE_HALF; t.dir=Math.random()<0.5?1:-1; t.lane=i%LANES.length;
+  });
+}
+for(let i=0;i<TOTAL;i++) trains.push(makeTrain());
+buildBays(NBAYS); resetSim();
+
+function dayHours(){ return mode==='optimized'?22:18; }
+
+function step(dDay){
+  simDay+=dDay;
+  // free finished maintenance
+  for(const t of trains){
+    if(t.role==='mnt'||t.role==='ovh'){
+      if(simDay>=t.busyUntil){ t.role='run'; t.cyc=null; }
+    }
+  }
+  // keep reserve count stable, gentle rotation every ~20 sim-days
+  let res=trains.filter(t=>t.role==='rsv').length;
+  for(const t of trains){
+    if(res<RESERVE && t.role==='run'){ t.role='rsv'; res++; }
+  }
+  if(simDay-lastRotate>20){
+    lastRotate=simDay;
+    const rsv=trains.find(t=>t.role==='rsv');
+    const run=trains.find(t=>t.role==='run');
+    if(rsv&&run){ rsv.role='run'; run.role='rsv'; }
+  }
+  // running trains accrue mileage and trigger maintenance
+  for(const t of trains){
+    if(t.role!=='run') continue;
+    t.odo+=KMDAY*dDay;
+    let guard=0;
+    while(Math.floor(t.odo/BASE)>t.lastB && guard<8){
+      t.lastB++; guard++;
+      const boundary=t.lastB*BASE;
+      const c=cycleAt(boundary);
+      if(c.ovh){ t.role='ovh'; t.cyc=c; t.busyUntil=simDay+c.h/dayHours(); break; }
+      if(mode==='optimized'){ t.flash=0.5; /* hidden overnight: stays available */ }
+      else { t.role='mnt'; t.cyc=c; t.busyUntil=simDay+c.h/18; break; }
+    }
+  }
+}
+
+/* ---------------- placement / animation ---------------- */
+const tmp=new THREE.Vector3();
+function assignSlots(){
+  // bays for maintenance/overhaul, queue overflow, reserve siding
+  let bay=0;
+  const cols=Math.ceil(NBAYS/2);
+  trains.forEach(t=>{
+    if(t.role==='mnt'||t.role==='ovh'){
+      let x,z;
+      if(bay<NBAYS){ const row=bay%2, col=Math.floor(bay/2);
+        x=(col-(cols-1)/2)*9.5; z=DEPOT_Z+(row?5:-5); }
+      else { const q=bay-NBAYS; x=(q-6)*9.0; z=QUEUE_Z; } // overflow queue
+      t.slot.set(x,0,z); bay++;
+    }
+  });
+  // reserve siding positions
+  let r=0; const rc=trains.filter(t=>t.role==='rsv').length;
+  trains.forEach(t=>{ if(t.role==='rsv'){ t.slot.set((r-(rc-1)/2)*10,0,RES_Z); r++; } });
+}
+
+function animateTrains(dt){
+  trains.forEach(t=>{
+    if(t.flash>0) t.flash=Math.max(0,t.flash-dt);
+    let targetColor;
+    if(t.role==='run'){
+      // move along the line, bounce at ends, gentle lane
+      t.lineX+=t.dir*32*dt*(0.4+speed/80);
+      if(t.lineX>LINE_HALF){t.lineX=LINE_HALF;t.dir=-1;}
+      if(t.lineX<-LINE_HALF){t.lineX=-LINE_HALF;t.dir=1;}
+      tmp.set(t.lineX,0,LANES[t.lane]);
+      t.g.position.lerp(tmp,Math.min(1,dt*6));
+      t.g.rotation.y = t.dir>0 ? 0 : Math.PI;
+      targetColor = t.flash>0 ? COL.mnt : COL.run;
+    } else {
+      tmp.copy(t.slot);
+      t.g.position.lerp(tmp,Math.min(1,dt*3));
+      t.g.rotation.y += (0 - t.g.rotation.y)*Math.min(1,dt*3);
+      targetColor = t.role==='ovh'?COL.ovh : t.role==='mnt'?COL.mnt : COL.rsv;
+    }
+    t.mat.color.lerp(new THREE.Color(targetColor),Math.min(1,dt*5));
+  });
+}
+
+/* ---------------- HUD ---------------- */
+const $=id=>document.getElementById(id);
+let hudTick=0;
+function updateHUD(){
+  const run=trains.filter(t=>t.role==='run').length;
+  const rsv=trains.filter(t=>t.role==='rsv').length;
+  const mnt=trains.filter(t=>t.role==='mnt').length;
+  const ovh=trains.filter(t=>t.role==='ovh').length;
+  const avail=(TOTAL-mnt-ovh)/TOTAL;
+  $('cRun').textContent=run; $('cRes').textContent=rsv;
+  $('cMnt').textContent=mnt; $('cOvh').textContent=ovh;
+  $('availV').textContent=(avail*100).toFixed(1)+'%';
+  const pass=avail>=0.89;
+  const box=$('availBox'); box.className='availbox '+(pass?'pass':'fail');
+  $('availNote').textContent = pass?'meets the ≥ 89% requirement':'below the 89% requirement';
+  const d=new Date(startDate.getTime()+simDay*86400000);
+  $('date').textContent=d.toLocaleDateString('en-CA',{year:'numeric',month:'short'});
+}
+
+/* ---------------- camera orbit ---------------- */
+let theta=0.6, phi=0.92, radius=125;
+const target=new THREE.Vector3(0,0,-4);
+function updateCamera(){
+  camera.position.set(
+    target.x+radius*Math.sin(phi)*Math.sin(theta),
+    target.y+radius*Math.cos(phi),
+    target.z+radius*Math.sin(phi)*Math.cos(theta));
+  camera.lookAt(target);
+}
+let drag=false,px=0,py=0;
+canvas.addEventListener('mousedown',e=>{drag=true;px=e.clientX;py=e.clientY;});
+window.addEventListener('mouseup',()=>drag=false);
+window.addEventListener('mousemove',e=>{ if(!drag)return;
+  theta-=(e.clientX-px)*0.005; phi-=(e.clientY-py)*0.005;
+  phi=Math.max(0.18,Math.min(1.45,phi)); px=e.clientX;py=e.clientY; });
+canvas.addEventListener('wheel',e=>{ e.preventDefault();
+  radius*=(1+e.deltaY*0.0011); radius=Math.max(45,Math.min(240,radius)); },{passive:false});
+
+function resize(){
+  const w=window.innerWidth,h=window.innerHeight;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------------- controls ---------------- */
+document.querySelectorAll('#modeSeg button').forEach(b=>b.addEventListener('click',()=>{
+  mode=b.dataset.mode;
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.mode===mode));
+}));
+$('speed').addEventListener('input',e=>{speed=+e.target.value;$('spV').textContent=speed+' days/s';});
+$('bays').addEventListener('input',e=>{NBAYS=+e.target.value;$('byV').textContent=NBAYS;buildBays(NBAYS);});
+$('playBtn').addEventListener('click',e=>{playing=!playing;e.target.textContent=playing?'⏸ Pause':'▶ Play';});
+$('resetBtn').addEventListener('click',resetSim);
+$('spV').textContent=speed+' days/s'; $('byV').textContent=NBAYS;
+
+/* ---------------- main loop ---------------- */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(playing){ step(dt*speed); }
+  assignSlots();
+  animateTrains(dt);
+  updateCamera();
+  if((hudTick++ % 5)===0) updateHUD();
+  renderer.render(scene,camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

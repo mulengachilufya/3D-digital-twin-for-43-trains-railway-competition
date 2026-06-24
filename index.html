@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HSS EVS360 Fleet Maintenance Digital Twin</title>
+<style>
+  :root{
+    --bg:#0c1118; --panel:#121a24; --panel2:#0f1620; --line:#22303f;
+    --ink:#e8eef5; --muted:#90a2b6; --accent:#2ee6a6; --accent2:#39a0ff;
+    --warn:#ffcc44; --bad:#ff5d6c; --good:#2ee6a6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI",Roboto,system-ui,Arial,sans-serif;font-size:14px}
+  a{color:var(--accent2)}
+  .wrap{display:grid;grid-template-columns:340px 1fr;min-height:100vh}
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:16px;overflow-y:auto;max-height:100vh}
+  .brand{font-weight:700;font-size:16px;letter-spacing:.2px}
+  .brand small{display:block;color:var(--muted);font-weight:400;font-size:11.5px;margin-top:3px}
+  .seg{display:flex;gap:6px;margin:14px 0 8px}
+  .seg button{flex:1;padding:9px 8px;border-radius:9px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--muted);cursor:pointer;font-weight:600;font-size:12.5px}
+  .seg button.on{background:linear-gradient(180deg,#16322a,#10241d);color:var(--accent);border-color:#1f5c47}
+  .seg button.on.base{background:linear-gradient(180deg,#2a1d16,#241410);color:var(--warn);border-color:#5c401f}
+  details{border:1px solid var(--line);border-radius:10px;margin:10px 0;background:var(--panel2)}
+  summary{cursor:pointer;padding:10px 12px;font-weight:600;color:var(--ink);user-select:none;font-size:12.8px}
+  summary::marker{color:var(--muted)}
+  .grp{padding:6px 12px 12px}
+  .ctl{margin:11px 0}
+  .ctl label{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-bottom:5px}
+  .ctl label b{color:var(--ink);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .chk{display:flex;align-items:center;gap:8px;margin:9px 0;color:var(--ink);font-size:12.6px}
+  .chk input{width:16px;height:16px;accent-color:var(--accent)}
+  .chk small{color:var(--muted);display:block}
+  .const{display:flex;justify-content:space-between;padding:4px 0;color:var(--muted);font-size:12px;border-bottom:1px dashed #1b2735}
+  .const b{color:var(--ink)}
+  .actions{display:flex;gap:8px;margin-top:12px}
+  .btn{flex:1;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--ink);cursor:pointer;font-weight:600;font-size:12.5px}
+  .btn:hover{border-color:var(--accent2)}
+  .btn.primary{background:linear-gradient(180deg,#123a52,#0e2a3c);border-color:#1f5c7a;color:#bfe6ff}
+  .main{padding:18px 22px;overflow-y:auto;max-height:100vh}
+  .topline{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .verdict{padding:8px 14px;border-radius:10px;font-weight:700;font-size:13px}
+  .verdict.pass{background:#10271f;color:var(--good);border:1px solid #1f5c47}
+  .verdict.fail{background:#2a1418;color:var(--bad);border:1px solid #5c2530}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+  .kpi .t{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+  .kpi .v{font-size:25px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+  .kpi .s{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .delta{font-size:12px;font-weight:600}
+  .delta.up{color:var(--good)} .delta.down{color:var(--bad)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:14px 0}
+  .card h3{margin:0 0 2px;font-size:14px}
+  .card p.sub{margin:0 0 10px;color:var(--muted);font-size:12px}
+  canvas{width:100%;display:block}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  table.cmp{width:100%;border-collapse:collapse;font-size:12.7px}
+  table.cmp th,table.cmp td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  table.cmp th{color:var(--muted);font-weight:600}
+  table.cmp td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .pill.g{background:#10271f;color:var(--good)} .pill.b{background:#2a1418;color:var(--bad)}
+  .note{color:var(--muted);font-size:11.6px;line-height:1.5}
+  .foot{color:var(--muted);font-size:11.4px;line-height:1.6;margin:18px 0 40px}
+  .foot b{color:var(--ink)}
+  .tag{display:inline-block;font-size:10.5px;color:var(--muted);border:1px solid var(--line);
+    border-radius:5px;padding:1px 6px;margin-left:6px}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}.side{max-height:none}.kpis{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="side">
+    <div class="brand">HSS · EVS360 Fleet Digital Twin
+      <small>Maintenance planning simulator · Problem&nbsp;#6 · Moscow–St.Petersburg HSR</small>
+    </div>
+
+    <div class="seg" id="strategySeg">
+      <button data-mode="baseline" class="base">Baseline (current)</button>
+      <button data-mode="optimized" class="on">Optimized twin</button>
+    </div>
+    <div class="note" id="modeNote"></div>
+
+    <details open>
+      <summary>Optimized techniques <span class="tag">toggle each</span></summary>
+      <div class="grp">
+        <div class="chk"><input type="checkbox" id="f_phase" checked>
+          <div>Mileage phase control<small>Stagger when trains become due so events arrive smoothly</small></div></div>
+        <div class="chk"><input type="checkbox" id="f_night" checked>
+          <div>Overnight service-block packing<small>Hide short/medium cycles in the 00:00–06:00 idle window</small></div></div>
+        <div class="chk"><input type="checkbox" id="f_cbm" checked>
+          <div>Condition-based reprofiling<small>Cut wheels on actual wear, not fixed 200,000 km</small></div></div>
+        <div class="chk"><input type="checkbox" id="f_pred" checked>
+          <div>Predictive unscheduled capture<small>Forecast failures and convert them to planned work</small></div></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Demand & passengers <span class="tag">variable</span></summary>
+      <div class="grp">
+        <div class="ctl"><label>Daily ridership <b id="v_rid"></b></label>
+          <input type="range" id="rid" min="10000" max="160000" step="1000"></div>
+        <div class="ctl"><label>Seasonal swing (± peak) <b id="v_seas"></b></label>
+          <input type="range" id="seas" min="0" max="0.5" step="0.01"></div>
+        <div class="ctl"><label>Weekend demand factor <b id="v_wknd"></b></label>
+          <input type="range" id="wknd" min="0.6" max="1.2" step="0.01"></div>
+        <div class="row2">
+          <div class="ctl"><label>Seats / train <b id="v_seats"></b></label>
+            <input type="range" id="seats" min="300" max="600" step="10"></div>
+          <div class="ctl"><label>Load factor <b id="v_lf"></b></label>
+            <input type="range" id="lf" min="0.4" max="0.95" step="0.01"></div>
+        </div>
+        <div class="ctl"><label>Max trips / train / day <b id="v_trips"></b></label>
+          <input type="range" id="trips" min="3" max="8" step="1"></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Fleet & depot capacity <span class="tag">variable</span></summary>
+      <div class="grp">
+        <div class="row2">
+          <div class="ctl"><label>Fleet size <b id="v_fleet"></b></label>
+            <input type="range" id="fleet" min="20" max="60" step="1"></div>
+          <div class="ctl"><label>Hot reserve <b id="v_res"></b></label>
+            <input type="range" id="res" min="0" max="10" step="1"></div>
+        </div>
+        <div class="row2">
+          <div class="ctl"><label>Daytime depot bays <b id="v_bays"></b></label>
+            <input type="range" id="bays" min="2" max="20" step="1"></div>
+          <div class="ctl"><label>Overnight bays <b id="v_nbays"></b></label>
+            <input type="range" id="nbays" min="2" max="30" step="1"></div>
+        </div>
+        <div class="row2">
+          <div class="ctl"><label>Wheel lathes <b id="v_lathe"></b></label>
+            <input type="range" id="lathe" min="1" max="4" step="1"></div>
+          <div class="ctl"><label>Lathe hours / day <b id="v_lh"></b></label>
+            <input type="range" id="lh" min="8" max="24" step="1"></div>
+        </div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Maintenance events <span class="tag">variable</span></summary>
+      <div class="grp">
+        <div class="ctl"><label>Unscheduled add-on (IS100–540) <b id="v_uns"></b></label>
+          <input type="range" id="uns" min="0" max="0.6" step="0.01"></div>
+        <div class="ctl"><label>Random breakdown rate / train·day <b id="v_fail"></b></label>
+          <input type="range" id="fail" min="0" max="0.01" step="0.0005"></div>
+        <div class="ctl"><label>Avg breakdown downtime (h) <b id="v_failh"></b></label>
+          <input type="range" id="failh" min="2" max="48" step="1"></div>
+        <div class="ctl"><label>Reprofiling interval (km) <b id="v_rep"></b></label>
+          <input type="range" id="rep" min="100000" max="300000" step="10000"></div>
+        <div class="ctl"><label>Target annual mileage / train <b id="v_am"></b></label>
+          <input type="range" id="am" min="500000" max="1200000" step="25000"></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Constants (brief) & horizon</summary>
+      <div class="grp">
+        <div class="const"><span>Line length</span><b>670 km</b></div>
+        <div class="const"><span>Consist</span><b>8 cars, fixed</b></div>
+        <div class="const"><span>Service window</span><b>06:00–24:00</b></div>
+        <div class="const"><span>Authorized service centre</span><b>Obukhovo depot</b></div>
+        <div class="const"><span>Availability target</span><b>≥ 89%</b></div>
+        <div class="ctl" style="margin-top:12px"><label>Simulation horizon (years) <b id="v_hz"></b></label>
+          <input type="range" id="hz" min="2" max="8" step="1"></div>
+        <div class="ctl"><label>Fleet ramp-up (trains/mo after first 6) <b id="v_ramp"></b></label>
+          <input type="range" id="ramp" min="1" max="3" step="1"></div>
+        <div class="note">First 6 trains enter Q2 2028, then +ramp/month until the fleet is full.</div>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button class="btn" id="resetBtn">Reset defaults</button>
+      <button class="btn primary" id="csvBtn">Export CSV</button>
+    </div>
+    <div class="note" style="margin-top:10px">Compare mode runs Baseline and Optimized on the same numbers so you can see the gap. Toggle it top-right.</div>
+  </aside>
+
+  <main class="main">
+    <div class="topline">
+      <div>
+        <h2 style="margin:0">Fleet operation, maintenance & availability</h2>
+        <div class="note">Discrete-time simulation of all <span id="ttl_fleet"></span> trains over <span id="ttl_hz"></span> years. Every input recomputes instantly.</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <label class="chk" style="margin:0"><input type="checkbox" id="cmpToggle" checked> Compare vs baseline</label>
+        <div id="verdict" class="verdict pass">—</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card">
+      <h3>Operational availability over time</h3>
+      <p class="sub">Share of the commissioned fleet available for service each day. Red line = 89% requirement.</p>
+      <canvas id="cvAvail" height="230"></canvas>
+      <div class="legend" id="lgAvail"></div>
+    </div>
+
+    <div class="card">
+      <h3>Trains undergoing maintenance simultaneously</h3>
+      <p class="sub">Lower and flatter is better. Spikes are depot overload days that drag availability down.</p>
+      <canvas id="cvMaint" height="200"></canvas>
+      <div class="legend" id="lgMaint"></div>
+    </div>
+
+    <div class="card">
+      <h3>Passenger demand satisfied</h3>
+      <p class="sub">Share of requested trips the available fleet could actually run. Drops mean passengers left behind.</p>
+      <canvas id="cvDemand" height="170"></canvas>
+      <div class="legend" id="lgDemand"></div>
+    </div>
+
+    <div class="card">
+      <h3>Head-to-head summary</h3>
+      <p class="sub">Same scenario, both strategies. This is the comparison the brief asks you to demonstrate.</p>
+      <table class="cmp" id="cmpTable"></table>
+    </div>
+
+    <div class="foot" id="assump"></div>
+  </main>
+</div>
+
+<script>
+/* =========================================================================
+   HSS EVS360 FLEET MAINTENANCE DIGITAL TWIN
+   Pure simulation engine (no DOM access) + interactive UI.
+   The engine block (mulberry32 -> runSim) is self-contained so it can be
+   unit-tested in Node without a browser.
+   ========================================================================= */
+
+/* seeded RNG so results are reproducible and A/B comparison is fair */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* maintenance cycle table (nested: higher cycle includes all lower).
+   Periods/hours marked (brief) are from the problem statement; the rest are
+   modelling assumptions teammates can recalibrate. */
+function cycleTable(){
+  return [
+    {name:'IS100', periodKm:12500,   hours:2,   overhaul:false}, // brief: 12,500 km / ~2h
+    {name:'IS200', periodKm:25000,   hours:5,   overhaul:false},
+    {name:'IS510', periodKm:100000,  hours:12,  overhaul:false},
+    {name:'IS520', periodKm:200000,  hours:24,  overhaul:false},
+    {name:'IS530', periodKm:400000,  hours:40,  overhaul:false},
+    {name:'IS540', periodKm:600000,  hours:60,  overhaul:false},
+    {name:'IS600', periodKm:1200000, hours:336, overhaul:true},  // brief: 1.2M km / weeks
+    {name:'IS700', periodKm:2400000, hours:504, overhaul:true}   // brief: 2.4M km / weeks
+  ];
+}
+
+/* ============================ THE ENGINE ============================ */
+function runSim(p){
+  const cycles=cycleTable().sort((a,b)=>b.periodKm-a.periodKm); // highest first
+  const BASE=12500;
+  const rand=mulberry32(p.seed||777);
+  const horizon=Math.round(p.horizonYears*365);
+  const opt=p.optimized;
+  const usePhase = opt && p.f_phase;     // desynchronise maintenance clocks
+  const useNight = opt && p.f_night;     // hide short/medium blocks overnight
+  const useCBM   = opt && p.f_cbm;       // condition-based reprofiling
+  const usePred  = opt && p.f_pred;      // predictive capture of unscheduled
+
+  const dayHours = opt ? 22 : 18;        // depot throughput h/day (optimized runs extra shifts)
+  const nightWin = 6;                    // 00:00-06:00 hideable window length
+  const maxHide  = 72;                   // h: jobs longer than this cannot be hidden overnight
+
+  // trains, with phase offsets (phase control spreads the maintenance clocks)
+  const trains=[];
+  for(let i=0;i<p.fleetTarget;i++){
+    trains.push({
+      id:i, odo:0, commissioned:false, commDay:0,
+      phase: usePhase ? (i/p.fleetTarget)*BASE : 0,
+      busyUntil:0,           // fractional day when this train's own service backlog clears
+      lastBoundary:0, lastReproOdo:0, annualKm:0,
+      shopMark:new Int8Array(horizon)    // dedupe distinct-train-in-shop counting per day
+    });
+  }
+
+  // resources = arrays of "next free time" (fractional days) per server
+  const dayBays=new Array(Math.max(1,p.depotBays)).fill(0);
+  const nightBays=new Array(Math.max(1,p.nightBays)).fill(0);
+  const lathes=new Array(Math.max(1,p.latheCount)).fill(0);
+
+  // daily accumulators
+  const outFrac=new Float64Array(horizon);   // fractional train-days lost to daytime maintenance
+  const inShop=new Float64Array(horizon);     // distinct trains touching the depot that day
+  const fleetN=new Int16Array(horizon);
+  const demandArr=new Float64Array(horizon);
+
+  let evCount=0, evDownSum=0, latheBusy=0;
+
+  function allocServer(servers,want,durDays){
+    let bi=0; for(let i=1;i<servers.length;i++) if(servers[i]<servers[bi]) bi=i;
+    const start=Math.max(want,servers[bi]); servers[bi]=start+durDays;
+    return {start, end:start+durDays};
+  }
+  function accrueDaytime(t,start,end){
+    const s=Math.max(0,start), e=Math.min(horizon,end); if(e<=s) return;
+    for(let d2=Math.floor(s); d2<Math.ceil(e) && d2<horizon; d2++){
+      const ov=Math.min(e,d2+1)-Math.max(s,d2);
+      if(ov>0){ outFrac[d2]+=ov; if(!t.shopMark[d2]){ inShop[d2]+=1; t.shopMark[d2]=1; } }
+    }
+  }
+  // place a job in a daytime bay. The train is PULLED when due and is unavailable
+  // until serviced, so any wait for a free bay counts as downtime (a bay shortage
+  // therefore lowers availability, and deferring maintenance is never "free").
+  function placeDay(t,due,H){
+    const dur=H/dayHours;
+    const outStart=Math.max(due,t.busyUntil);
+    const a=allocServer(dayBays,outStart,dur);   // a.start >= outStart if the bay is busy (queue)
+    t.busyUntil=a.end;
+    accrueDaytime(t,outStart,a.end);             // queue wait + service both count as downtime
+    evCount++; evDownSum+=(a.end-outStart);
+  }
+  // hide a job overnight: consumes night capacity only, zero daytime unavailability
+  function placeNight(t,want,H){
+    const dur=H/nightWin;
+    const a=allocServer(nightBays,want,dur);
+    if(a.start-want>6){ placeDay(t,want,H); return; } // night saturated -> spill to daytime
+    evCount++;
+  }
+  function service(t,b,d){
+    let chosen=cycles[cycles.length-1];
+    for(const c of cycles){ if(Math.abs(b % c.periodKm) < 1){ chosen=c; break; } }
+    let H=chosen.hours*(chosen.overhaul ? 1.10 : (1+p.unsAddon));
+    if(useNight && !chosen.overhaul && H<=maxHide) placeNight(t,d,H);
+    else placeDay(t,d,H);
+  }
+  function reprofile(t,d){
+    const latheH=p.reproBogies*p.reproHrPerBogie*(useCBM?0.6:1); // CBM: only worn bogies
+    const dur=latheH/p.latheHoursPerDay;
+    const want=Math.max(d,t.busyUntil);
+    const a=allocServer(lathes,want,dur); latheBusy+=dur;
+    if(useNight){ /* lathe slotted into nights, train keeps running by day */ }
+    else { t.busyUntil=a.end; accrueDaytime(t,want,a.end); evCount++; evDownSum+=(a.end-want); }
+  }
+  const headroom=t=>{ const eff=t.odo+t.phase; return BASE-(eff%BASE); };
+
+  let startDow=2;
+  for(let d=0; d<horizon; d++){
+    const months=d/30.44;
+    const commTarget=Math.min(p.fleetTarget, 6+Math.floor(months*p.ramp));
+    for(let i=0;i<commTarget;i++) if(!trains[i].commissioned){trains[i].commissioned=true;trains[i].commDay=d;}
+    const active=trains.filter(t=>t.commissioned);
+    const N=active.length; fleetN[d]=N;
+    if(N===0){ demandArr[d]=1; continue; }
+
+    // demand
+    const doy=d%365;
+    const seasonal=1+p.seasonAmp*Math.sin(2*Math.PI*(doy-100)/365);
+    const dow=(d+startDow)%7; const wknd=(dow===5||dow===6)?p.weekendFactor:1;
+    const ridership=p.dailyRidership*seasonal*wknd;
+    const reqTrips=ridership/(p.seats*p.loadFactor);
+
+    // trains available to run today (not currently in a daytime service interval)
+    let pool=active.filter(t=> t.busyUntil<=d+1);
+    if(pool.length===0) pool=active.slice();
+
+    const capTrips=pool.length*p.maxTrips;
+    const tripsRun=Math.min(reqTrips, capTrips);
+    demandArr[d]=reqTrips>0 ? tripsRun/reqTrips : 1;
+    const trainsToRun=Math.max(1, Math.min(pool.length, Math.ceil(tripsRun/p.maxTrips)));
+
+    // Duty assignment uses the same neutral calendar rotation in every mode, so the
+    // duty roster is never the lever. Phase control instead works through each train's
+    // built-in maintenance-clock OFFSET (set at commissioning when usePhase is on): it
+    // spreads the IS-cycle due-points uniformly across the fleet so depot arrivals are
+    // smooth, while the baseline lets them fall in their natural bursty pattern.
+    let runners; const off=d % pool.length; runners=[];
+    for(let k=0;k<trainsToRun;k++) runners.push(pool[(off+k)%pool.length]);
+
+    const kmPer=runners.length>0 ? (tripsRun*p.oneWayKm)/runners.length : 0;
+    for(const t of runners){
+      const km=Math.min(kmPer, p.maxTrips*p.oneWayKm);
+      t.odo+=km; t.annualKm+=km;
+      const eff=t.odo+t.phase;
+      let guard=0;
+      while(t.lastBoundary+BASE<=eff && guard<60){ const nb=t.lastBoundary+BASE; service(t,nb,d); t.lastBoundary=nb; guard++; }
+      const repInt=p.reproKm*(useCBM?1.6:1);
+      if(t.odo-t.lastReproOdo>=repInt){ reprofile(t,d); t.lastReproOdo=t.odo; }
+    }
+    // random unscheduled breakdowns
+    for(const t of active){
+      if(rand()<p.failRate){
+        const H=p.failHours;
+        if(usePred && rand()<0.6){ if(useNight) placeNight(t,d,H*0.5); else placeDay(t,d,H*0.5); }
+        else placeDay(t,d,H);
+      }
+    }
+  }
+
+  // build full series (for plotting the whole timeline incl. ramp)
+  const avail=new Array(horizon), maint=new Array(horizon), demand=new Array(horizon), day=new Array(horizon);
+  for(let d=0; d<horizon; d++){
+    const N=fleetN[d]||1;
+    avail[d]=Math.max(0, Math.min(1, (N-outFrac[d])/N));
+    maint[d]=inShop[d]; demand[d]=demandArr[d]; day[d]=d;
+  }
+  // KPIs are computed on the STEADY-STATE window (after fleet ramp-up), which is
+  // what the brief's long-horizon availability assessment is about.
+  let warm=horizon; const target=Math.ceil(0.85*p.fleetTarget);
+  for(let d=0; d<horizon; d++){ if(fleetN[d]>=target){ warm=d; break; } }
+  if(warm>=horizon) warm=Math.floor(horizon*0.3);
+  const win=a=>a.slice(warm);
+  const mean=a=>a.length? a.reduce((s,x)=>s+x,0)/a.length : 0;
+  const av=win(avail), mt=win(maint), dm=win(demand);
+  const meanAvail=mean(av), minAvail=av.length?Math.min(...av):0;
+  const pctMeet=av.length? av.filter(x=>x>=0.89).length/av.length : 0;
+  const maxMaint=mt.length?Math.max(...mt):0, meanMaint=mean(mt);
+  const meanDemand=mean(dm);
+  const meanDowntime=evCount? evDownSum/evCount : 0;
+  const latheUtil=horizon? latheBusy/(p.latheCount*horizon) : 0;
+  const sd=Math.sqrt(mean(mt.map(x=>(x-meanMaint)**2)));
+  const cov=sd/(meanMaint||1e-9);
+  const realAnnualKm=mean(trains.filter(t=>t.commissioned).map(t=>t.annualKm/(horizon/365)));
+
+  return {series:{day,avail,maint,demand}, kpis:{
+    meanAvail,minAvail,pctMeet,maxMaint,meanMaint,meanDemand,
+    meanDowntime,latheUtil,cov,realAnnualKm,events:evCount
+  }};
+}
+
+/* ============================ UI / WIRING ============================ */
+const DEFAULTS={
+  mode:'optimized',
+  f_phase:true,f_night:true,f_cbm:true,f_pred:true,
+  rid:50000, seas:0.20, wknd:0.92, seats:450, lf:0.70, trips:5,
+  fleet:43, res:4, bays:14, nbays:14, lathe:1, lh:20,
+  uns:0.30, fail:0.0015, failh:18, rep:200000, am:900000,
+  hz:5, ramp:1
+};
+let state=Object.assign({},DEFAULTS);
+
+const $=id=>document.getElementById(id);
+function bindRange(id,fmt,key){
+  const el=$(id), out=$('v_'+id);
+  el.addEventListener('input',()=>{ state[key]=parseFloat(el.value); out.textContent=fmt(parseFloat(el.value)); render(); });
+  return ()=>{ el.value=state[key]; out.textContent=fmt(state[key]); };
+}
+const fInt=v=>Math.round(v).toString();
+const fK=v=>Math.round(v).toLocaleString();
+const fPc=v=>(v*100).toFixed(0)+'%';
+const fPc1=v=>(v*100).toFixed(1)+'%';
+const f2=v=>v.toFixed(2);
+const fKm=v=>(v/1000).toFixed(0)+'k km';
+const fFail=v=>(v*100).toFixed(2)+'%';
+
+const setters=[
+  bindRange('rid',fK,'rid'), bindRange('seas',fPc,'seas'), bindRange('wknd',f2,'wknd'),
+  bindRange('seats',fInt,'seats'), bindRange('lf',f2,'lf'), bindRange('trips',fInt,'trips'),
+  bindRange('fleet',fInt,'fleet'), bindRange('res',fInt,'res'), bindRange('bays',fInt,'bays'),
+  bindRange('nbays',fInt,'nbays'), bindRange('lathe',fInt,'lathe'), bindRange('lh',fInt,'lh'),
+  bindRange('uns',fPc,'uns'), bindRange('fail',fFail,'fail'), bindRange('failh',fInt,'failh'),
+  bindRange('rep',fKm,'rep'), bindRange('am',fKm,'am'), bindRange('hz',fInt,'hz'),
+  bindRange('ramp',v=>v+' /mo','ramp')
+];
+['f_phase','f_night','f_cbm','f_pred'].forEach(k=>{
+  $(k).addEventListener('change',()=>{state[k]=$(k).checked;render();});
+});
+$('cmpToggle').addEventListener('change',render);
+document.querySelectorAll('#strategySeg button').forEach(b=>{
+  b.addEventListener('click',()=>{ state.mode=b.dataset.mode; syncMode(); render(); });
+});
+$('resetBtn').addEventListener('click',()=>{ state=Object.assign({},DEFAULTS); syncAll(); render(); });
+$('csvBtn').addEventListener('click',exportCSV);
+
+function syncMode(){
+  document.querySelectorAll('#strategySeg button').forEach(b=> b.classList.toggle('on',b.dataset.mode===state.mode));
+  $('modeNote').textContent = state.mode==='baseline'
+    ? 'Baseline = the fixed-cycle scheme used today: full maintenance scope in daytime windows, strict 200,000 km reprofiling, mileage balanced evenly across the fleet (which synchronises maintenance and causes depot clustering).'
+    : 'Optimized = phase control + overnight service-block packing + condition-based reprofiling + predictive capture. Toggle each technique to isolate its effect.';
+}
+function syncAll(){
+  setters.forEach(fn=>fn());
+  ['f_phase','f_night','f_cbm','f_pred'].forEach(k=>$(k).checked=state[k]);
+  syncMode();
+}
+
+function params(modeOpt){
+  return {
+    optimized:modeOpt,
+    f_phase:state.f_phase,f_night:state.f_night,f_cbm:state.f_cbm,f_pred:state.f_pred,
+    horizonYears:state.hz, fleetTarget:state.fleet, ramp:state.ramp, hotReserve:state.res,
+    depotBays:state.bays, nightBays:state.nbays, latheCount:state.lathe, latheHoursPerDay:state.lh,
+    dailyRidership:state.rid, seasonAmp:state.seas, weekendFactor:state.wknd,
+    seats:state.seats, loadFactor:state.lf, maxTrips:state.trips, oneWayKm:670,
+    unsAddon:state.uns, failRate:state.fail, failHours:state.failh,
+    reproKm:state.rep, reproBogies:16, reproHrPerBogie:1.2, seed:777
+  };
+}
+
+/* ---------------- dependency-free canvas charts ---------------- */
+function weekly(arr){ const w=[]; for(let i=0;i<arr.length;i+=7){ let s=0,n=0;
+  for(let j=i;j<Math.min(i+7,arr.length);j++){s+=arr[j];n++;} w.push(s/n);} return w; }
+
+function lineChart(cv, seriesList, opt){
+  const dpr=window.devicePixelRatio||1;
+  const W=cv.clientWidth||700, H=parseInt(cv.getAttribute('height'));
+  cv.width=W*dpr; cv.height=H*dpr;
+  const g=cv.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const pad={l:46,r:14,t:12,b:22};
+  const x0=pad.l,x1=W-pad.r,y0=pad.t,y1=H-pad.b;
+  let lo=opt.min, hi=opt.max;
+  if(lo==null||hi==null){ let a=Infinity,b=-Infinity;
+    seriesList.forEach(s=>s.data.forEach(v=>{a=Math.min(a,v);b=Math.max(b,v);}));
+    lo=opt.min!=null?opt.min:a; hi=opt.max!=null?opt.max:b; if(hi===lo)hi=lo+1; }
+  const n=seriesList[0].data.length||1;
+  const X=i=>x0+(x1-x0)*(i/(n-1||1));
+  const Y=v=>y1-(y1-y0)*((v-lo)/(hi-lo));
+  g.strokeStyle='#1b2735'; g.fillStyle='#7f93a8'; g.font='11px Segoe UI'; g.lineWidth=1;
+  const ticks=opt.yticks||4;
+  for(let t=0;t<=ticks;t++){ const v=lo+(hi-lo)*t/ticks; const y=Y(v);
+    g.beginPath();g.moveTo(x0,y);g.lineTo(x1,y);g.stroke();
+    g.fillText(opt.yfmt?opt.yfmt(v):v.toFixed(0), 6, y+4); }
+  if(opt.threshold!=null){ const y=Y(opt.threshold);
+    g.strokeStyle='#ff5d6c'; g.setLineDash([5,4]); g.beginPath();g.moveTo(x0,y);g.lineTo(x1,y);g.stroke(); g.setLineDash([]); }
+  g.fillStyle='#7f93a8';
+  const totalDays=opt.totalDays||n*7; const yrs=Math.ceil(totalDays/365);
+  for(let yy=0;yy<=yrs;yy++){ const frac=(yy*365)/totalDays; if(frac>1)break;
+    const x=x0+(x1-x0)*frac; g.fillText('Y'+yy,x-6,H-6); }
+  seriesList.forEach(s=>{
+    g.strokeStyle=s.color; g.lineWidth=s.width||2; g.beginPath();
+    s.data.forEach((v,i)=>{ const px=X(i),py=Y(v); i?g.lineTo(px,py):g.moveTo(px,py); });
+    g.stroke();
+    if(s.fill){ g.lineTo(X(s.data.length-1),y1); g.lineTo(X(0),y1); g.closePath(); g.fillStyle=s.fill; g.fill(); }
+  });
+}
+function legend(id,series){ $(id).innerHTML=series.map(s=>`<span><i style="background:${s.color}"></i>${s.name}</span>`).join(''); }
+
+/* ---------------- render ---------------- */
+let lastResults={};
+function render(){
+  const cmp=$('cmpToggle').checked;
+  const primaryOpt = state.mode==='optimized';
+  const rPrim=runSim(params(primaryOpt));
+  const rBase=runSim(params(false));
+  const rOpt = primaryOpt? rPrim : runSim(params(true));
+  lastResults={rPrim,rBase,rOpt,primaryOpt};
+
+  const k=rPrim.kpis, kb=rBase.kpis;
+  const pass=k.meanAvail>=0.89 && k.pctMeet>=0.9;
+  const vd=$('verdict'); vd.className='verdict '+(pass?'pass':'fail');
+  vd.textContent=pass?('PASS · '+fPc1(k.meanAvail)+' avail'):('AT RISK · '+fPc1(k.meanAvail)+' avail');
+
+  const card=(t,v,s,delta)=>`<div class="kpi"><div class="t">${t}</div><div class="v">${v}</div><div class="s">${s||''} ${delta||''}</div></div>`;
+  const dlt=(now,base,goodUp,fmt)=>{ if(!cmp||state.mode==='baseline')return'';
+    const diff=now-base; const good=goodUp?diff>=0:diff<=0; const sign=diff>=0?'+':'';
+    return `<span class="delta ${good?'up':'down'}">${sign}${fmt(diff)} vs base</span>`; };
+  $('kpis').innerHTML=
+    card('Mean availability', fPc1(k.meanAvail), 'target ≥ 89%', dlt(k.meanAvail,kb.meanAvail,true,d=>fPc1(d)))+
+    card('Days meeting 89%', fPc(k.pctMeet), 'of all service days', dlt(k.pctMeet,kb.pctMeet,true,d=>(d*100).toFixed(0)+'pp'))+
+    card('Max trains in shop', k.maxMaint.toFixed(0), 'simultaneous peak', dlt(k.maxMaint,kb.maxMaint,false,d=>d.toFixed(0)))+
+    card('Avg downtime / event', k.meanDowntime.toFixed(2)+' d', 'queue + service', dlt(k.meanDowntime,kb.meanDowntime,false,d=>d.toFixed(2)+'d'))+
+    card('Workload evenness', (1/(1+k.cov)).toFixed(2), 'higher = flatter depot', dlt(1/(1+k.cov),1/(1+kb.cov),true,d=>d.toFixed(2)))+
+    card('Demand satisfied', fPc1(k.meanDemand), 'trips actually run', dlt(k.meanDemand,kb.meanDemand,true,d=>fPc1(d)))+
+    card('Lathe utilisation', fPc(k.latheUtil), 'reprofiling bottleneck', '')+
+    card('Realised annual km', Math.round(k.realAnnualKm/1000)+'k', 'vs 900k target', '');
+
+  const totalDays=rPrim.series.day.length;
+  function build(metric,color,baseColor,fillOpt){
+    const arr=[]; const main={name:'Optimized',color,data:weekly(rOpt.series[metric])}; if(fillOpt)main.fill=fillOpt;
+    if(cmp){ arr.push({name:'Baseline',color:baseColor,data:weekly(rBase.series[metric])}); arr.push(main); }
+    else if(state.mode==='baseline'){ arr.push({name:'Baseline',color:baseColor,data:weekly(rBase.series[metric]),fill:fillOpt}); }
+    else arr.push(main);
+    return arr;
+  }
+  const aS=build('avail','#2ee6a6','#ffcc44');
+  lineChart($('cvAvail'),aS,{min:0.70,max:1.0,threshold:0.89,yfmt:v=>(v*100).toFixed(0)+'%',totalDays});
+  legend('lgAvail',aS.concat([{name:'89% requirement',color:'#ff5d6c'}]));
+
+  const maxM=Math.max(rBase.kpis.maxMaint,rOpt.kpis.maxMaint,4);
+  const mS=build('maint','#2ee6a6','#ffcc44','rgba(46,230,166,0.10)');
+  lineChart($('cvMaint'),mS,{min:0,max:Math.ceil(maxM*1.2),yfmt:v=>v.toFixed(0),totalDays});
+  legend('lgMaint',mS);
+
+  const dS=build('demand','#39a0ff','#ffcc44');
+  lineChart($('cvDemand'),dS,{min:0.6,max:1.0,yfmt:v=>(v*100).toFixed(0)+'%',totalDays});
+  legend('lgDemand',dS);
+
+  const row=(label,b,o,fmt,goodUp)=>{
+    const better=goodUp? o>=b : o<=b;
+    return `<tr><td>${label}</td><td class="num">${fmt(b)}</td><td class="num">${fmt(o)}</td>
+      <td><span class="pill ${better?'g':'b'}">${better?'Optimized wins':'Baseline'}</span></td></tr>`;
+  };
+  $('cmpTable').innerHTML=
+    `<tr><th>Metric</th><th class="num">Baseline (current)</th><th class="num">Optimized twin</th><th>Result</th></tr>`+
+    row('Mean availability', kb.meanAvail, rOpt.kpis.meanAvail, fPc1, true)+
+    row('Minimum availability', kb.minAvail, rOpt.kpis.minAvail, fPc1, true)+
+    row('Days meeting 89%', kb.pctMeet, rOpt.kpis.pctMeet, fPc, true)+
+    row('Peak trains in shop', kb.maxMaint, rOpt.kpis.maxMaint, v=>v.toFixed(0), false)+
+    row('Avg trains in shop', kb.meanMaint, rOpt.kpis.meanMaint, v=>v.toFixed(1), false)+
+    row('Avg downtime / event (days)', kb.meanDowntime, rOpt.kpis.meanDowntime, v=>v.toFixed(2), false)+
+    row('Depot workload CoV (lower=flatter)', kb.cov, rOpt.kpis.cov, v=>v.toFixed(2), false)+
+    row('Demand satisfied', kb.meanDemand, rOpt.kpis.meanDemand, fPc1, true);
+
+  $('ttl_fleet').textContent=state.fleet;
+  $('ttl_hz').textContent=state.hz;
+  $('assump').innerHTML=
+    `<b>How to read this:</b> Baseline reproduces today's fixed-cycle scheme; the Optimized twin adds the four techniques on the left. `+
+    `Toggle any technique off to see how many availability points it is worth, the evidence that wins the head-to-head the brief asks for.<br><br>`+
+    `<b>From the brief (constants):</b> 670 km line, 43 trains, 8-car fixed consist, 4 hot reserve, IS100 every 12,500 km/2 h, IS600 at 1.2 M km, IS700 at 2.4 M km, reprofiling every 200,000 km on a single tandem lathe (1.2 h/bogie), availability ≥ 89%, ramp of 6 trains in Q2 2028 then +1/month, ~900,000 km/train/year.<br>`+
+    `<b>Modelling assumptions (tune freely):</b> IS200/IS510–540 periods and durations, seats/train, load factor, depot bay counts, overnight-window length (6 h), max hideable job (72 h), CBM wear factor (1.6×) and predictive capture (60%). Every number is a slider or is documented here so the whole model is auditable.`;
+}
+
+function exportCSV(){
+  const b=lastResults.rBase, o=lastResults.rOpt;
+  let csv='day,baseline_availability,optimized_availability,baseline_in_shop,optimized_in_shop,baseline_demand,optimized_demand\n';
+  for(let i=0;i<o.series.day.length;i++){
+    csv+=`${o.series.day[i]},${b.series.avail[i].toFixed(4)},${o.series.avail[i].toFixed(4)},`+
+         `${b.series.maint[i]},${o.series.maint[i]},${b.series.demand[i].toFixed(4)},${o.series.demand[i].toFixed(4)}\n`;
+  }
+  const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='hss-fleet-simulation.csv'; a.click();
+}
+
+window.addEventListener('resize',()=>render());
+syncAll(); render();
+</script>
+</body>
+</html>
