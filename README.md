@@ -51,7 +51,8 @@ Everything runs client-side. No server, no build step, no account.
 ## Live demo and quick start
 
 **Easiest:** download `index.html` (2D) or `depot-3d.html` (3D) and double-click to open in any
-browser. `index.html` works fully offline.
+browser. Both files work fully offline on any PC; the 3D library is embedded directly inside
+`depot-3d.html`, so there is nothing to download or install.
 
 **Hosted (optional):** enable GitHub Pages (repo Settings to Pages to Deploy from `main`), then:
 - 2D dashboard: `https://mulengachilufya.github.io/3D-digital-twin-for-43-trains-railway-competition/`
@@ -188,6 +189,8 @@ app, so the whole model is auditable.
 - **Vanilla JavaScript** (ES2017+), no framework, no bundler.
 - **HTML5 Canvas** for the 2D charts, hand-rolled (zero charting dependencies).
 - **Three.js (WebGL)** for the 3D depot and line simulation, with a hand-written orbit camera.
+  The library is embedded inline, so the 3D file is a single self-contained document that runs
+  offline on any PC.
 - **Node.js** for the validation harnesses.
 - Single-file, dependency-free distribution (the 2D twin has no runtime dependencies at all).
 
@@ -234,7 +237,6 @@ predictive capture rate.
 
 ## Roadmap
 
-- Vendor Three.js into the 3D file so it runs fully offline.
 - Add a depot Gantt view and an explicit hot-reserve swap animation.
 - Add a small optimizer that finds the minimum depot footprint (bays + lathes) that still holds 89%.
 - Replace the rules-based optimized plan with a learned (reinforcement-learning) scheduling policy.
